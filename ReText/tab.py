@@ -32,7 +32,7 @@ except ImportError:
 
 from PyQt5.QtCore import pyqtSignal, Qt, QDir, QFile, QFileInfo, QPoint, QTextStream, QTimer, QUrl
 from PyQt5.QtGui import QPalette, QTextCursor, QTextDocument
-from PyQt5.QtWidgets import QApplication, QTextEdit, QSplitter, QMessageBox
+from PyQt5.QtWidgets import QApplication, QTextEdit, QSplitter, QMessageBox, QListView
 
 try:
 	from ReText.webkitpreview import ReTextWebKitPreview

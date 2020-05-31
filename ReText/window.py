@@ -23,11 +23,13 @@ import warnings
 
 from ReText import (getBundledIcon, app_version, globalSettings,
                     readListFromSettings, writeListToSettings, datadirs)
+
 from ReText.tab import (ReTextTab, ReTextWebKitPreview, ReTextWebEnginePreview,
                         PreviewDisabled, PreviewNormal, PreviewLive)
 from ReText.dialogs import HtmlDialog, LocaleDialog
 from ReText.config import ConfigDialog, setIconThemeFromSettings
 from ReText.tabledialog import InsertTableDialog
+
 
 try:
 	from ReText.fakevimeditor import ReTextFakeVimHandler, FakeVimMode
@@ -45,9 +47,12 @@ from PyQt5.QtGui import QColor, QDesktopServices, QIcon, \
  QKeySequence, QPageLayout, QPageSize, QPagedPaintDevice, QPalette, \
  QTextDocument, QTextDocumentWriter
 from PyQt5.QtWidgets import QAction, QActionGroup, QApplication, QCheckBox, \
- QComboBox, QDesktopWidget, QDialog, QFileDialog, QFontDialog, QInputDialog, \
- QLineEdit, QMainWindow, QMenu, QMessageBox, QTabWidget, QToolBar
+	QComboBox, QDesktopWidget, QDialog, QFileDialog, QFontDialog, QInputDialog, \
+	QLineEdit, QMainWindow, QMenu, QMessageBox, QTabWidget, QToolBar, QSplitter, QListView
 from PyQt5.QtPrintSupport import QPrintDialog, QPrintPreviewDialog, QPrinter
+
+from ReText.sideview import SideView, DirListerFilenames, DirListerFolders
+
 
 class ReTextWindow(QMainWindow):
 	def __init__(self, parent=None):
@@ -76,7 +81,24 @@ class ReTextWindow(QMainWindow):
 				QIcon.fromTheme('accessories-text-editor')))
 		self.tabWidget = QTabWidget(self)
 		self.initTabWidget()
-		self.setCentralWidget(self.tabWidget)
+
+		sideViewNotebooks = SideView(DirListerFolders())
+		sideViewNotebooks.setDirectory("/home/seb/tmp/test_workspace/")
+
+		sideViewPages = SideView(DirListerFilenames())
+		sideViewPages.setDirectory("/home/seb/tmp/test_workspace/a/")
+
+		splitter = QSplitter()
+		self.setCentralWidget(splitter)
+
+		splitter.addWidget(sideViewNotebooks.listView)
+		splitter.addWidget(sideViewPages.listView)
+		splitter.addWidget(self.tabWidget)
+
+		splitter.setStretchFactor(0, 1)
+		splitter.setStretchFactor(1, 1)
+		splitter.setStretchFactor(2, 2)
+
 		self.tabWidget.currentChanged.connect(self.changeIndex)
 		self.tabWidget.tabCloseRequested.connect(self.closeTab)
 		self.toolBar = QToolBar(self.tr('File toolbar'), self)
