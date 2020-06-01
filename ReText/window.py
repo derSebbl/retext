@@ -24,6 +24,7 @@ import warnings
 
 from ReText import (getBundledIcon, app_version, globalSettings,
                     readListFromSettings, writeListToSettings, datadirs)
+from ReText.EntryProvider import EntryProviderDirectory, EntryProviderFile
 
 from ReText.tab import (ReTextTab, ReTextWebKitPreview, ReTextWebEnginePreview,
                         PreviewDisabled, PreviewNormal, PreviewLive)
@@ -49,7 +50,8 @@ from PyQt5.QtGui import QColor, QDesktopServices, QIcon, \
 	QTextDocument, QTextDocumentWriter, QMouseEvent
 from PyQt5.QtWidgets import QAction, QActionGroup, QApplication, QCheckBox, \
 	QComboBox, QDesktopWidget, QDialog, QFileDialog, QFontDialog, QInputDialog, \
-	QLineEdit, QMainWindow, QMenu, QMessageBox, QTabWidget, QToolBar, QSplitter, QListView
+	QLineEdit, QMainWindow, QMenu, QMessageBox, QTabWidget, QToolBar, QSplitter, QListView, QVBoxLayout, QPushButton, \
+	QWidget
 from PyQt5.QtPrintSupport import QPrintDialog, QPrintPreviewDialog, QPrinter
 
 from ReText.sideview import SideView, DirListerFilenames, DirListerFolders
@@ -83,22 +85,9 @@ class ReTextWindow(QMainWindow):
 		self.tabWidget = QTabWidget(self)
 		self.initTabWidget()
 
-		sideViewNotebooks = SideView(DirListerFolders(), lambda selectedItem: sideViewPages.setDirectory(selectedItem))
-		sideViewNotebooks.setDirectory("/home/seb/tmp/test_workspace/")
 
-		sideViewPages = SideView(DirListerFilenames(), lambda selectedItem: self.openFileWrapper(selectedItem))
-		sideViewPages.setDirectory("/home/seb/tmp/test_workspace/a/")
 
-		splitter = QSplitter()
-		self.setCentralWidget(splitter)
-
-		splitter.addWidget(sideViewNotebooks.listView)
-		splitter.addWidget(sideViewPages.listView)
-		splitter.addWidget(self.tabWidget)
-
-		splitter.setStretchFactor(0, 1)
-		splitter.setStretchFactor(1, 1)
-		splitter.setStretchFactor(2, 2)
+		self.initSideViews()
 
 
 		self.tabWidget.currentChanged.connect(self.changeIndex)
@@ -418,8 +407,12 @@ class ReTextWindow(QMainWindow):
 		self.fileSystemWatcher.fileChanged.connect(self.fileChanged)
 
 	def eventFilter(self, obj, event : QEvent) -> bool:
-		if event.type() == QEvent.MouseButtonRelease:
-			print("klick hook")
+
+		if event.type() == QEvent.MouseButtonRelease \
+		and obj == self.tabWidget.tabBar() \
+		and event.button() == Qt.MidButton:
+			tabIndex = self.tabWidget.tabBar().tabAt(event.pos())
+			self.closeTab(tabIndex)
 		return super().eventFilter(obj, event)
 
 	def restoreLastOpenedFiles(self):
@@ -442,6 +435,40 @@ class ReTextWindow(QMainWindow):
 			sheetfile.open(QIODevice.ReadOnly)
 			self.ss = QTextStream(sheetfile).readAll()
 			sheetfile.close()
+
+	def initSideViews(self):
+		newNotebookText = 'New Notebook'
+		sideViewNotebooks = SideView(DirListerFolders(), EntryProviderDirectory(newNotebookText), newNotebookText, lambda selectedItem: sideViewPages.setDirectory(selectedItem))
+		sideViewNotebooks.setDirectory("/home/seb/tmp/test_workspace/")
+
+		newPageText = 'New Page'
+		sideViewPages = SideView(DirListerFilenames(), EntryProviderFile(newPageText), newPageText, lambda selectedItem: self.openFileWrapper(selectedItem))
+		#sideViewPages.setDirectory("/home/seb/tmp/test_workspace/a/")
+
+		splitter = QSplitter()
+		self.setCentralWidget(splitter)
+
+		splitter.addWidget(sideViewNotebooks.listView)
+
+		pagesLayout = QVBoxLayout()
+		pagesLayout.addWidget(sideViewPages.listView)
+
+		button_addNewPage = QPushButton()
+		button_addNewPage.setText("New Page")
+		button_addNewPage.clicked.connect(lambda: sideViewPages.createNewEntryTriggered() )
+
+		pagesLayout.addWidget(button_addNewPage)
+		sideViewPages.createNewEntryTriggered()
+
+		layoutParent = QWidget()
+		layoutParent.setLayout(pagesLayout)
+
+		splitter.addWidget(layoutParent)
+		splitter.addWidget(self.tabWidget)
+
+		splitter.setStretchFactor(0, 1)
+		splitter.setStretchFactor(1, 1)
+		splitter.setStretchFactor(2, 2)
 
 	def initTabWidget(self):
 		def dragEnterEvent(e):

@@ -1,7 +1,11 @@
+import sys
+
 from PyQt5 import QtCore
 from PyQt5.Qt import QDir, QListView, QStringListModel
 from PyQt5.QtCore import QFile, QTextStream, QObject
-from PyQt5.QtWidgets import QAbstractItemView, QWidget
+from PyQt5.QtWidgets import QAbstractItemView, QWidget, QLineEdit
+
+from ReText.EntryProvider import IEntryProvider
 
 
 class DirListerFilenames:
@@ -82,15 +86,18 @@ class SortingParser:
 
 
 class SideView():
-    def __init__(self, dirLister, onItemSelectedCallback ):
+    def __init__(self, dirLister, entryProvider : IEntryProvider, newEntryText : str, onItemSelectedCallback ):
         self.listView = QListView()
         self.currentDir: QDir
         self.model = QStringListModel()
         self.directoryLister = dirLister
+        self.entryProvider = entryProvider
+        self.newEntryText = newEntryText
         self.sortingParser = None
 
         self.listView.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.listView.setModel(self.model)
+        self.listView.setMinimumWidth(200)
 
         self.listView.selectionModel().currentChanged.connect(
             lambda selectedItem, unselectedItem:
@@ -107,4 +114,20 @@ class SideView():
         sortedEntries = self.sortingParser.getSortedList(entries)
         
         self.model.setStringList(sortedEntries)
+
+    def createNewEntryTriggered(self):
+        def onNewEntryCommited(editedLine : QLineEdit):
+            try:
+                self.entryProvider.addEntry(editedLine.text())
+                self.refreshListViewEntries()
+                self.listView.setCurrentIndex(index)
+            except Exception:
+                print(f"Error adding entry {editedLine.text()}", file=sys.stderr)
+
+        self.listView.itemDelegate().commitData.connect(onNewEntryCommited)
+
+        index = self.model.index(self.model.rowCount() - 1, 0)
+        self.model.setData(index, self.newEntryText)
+        self.listView.edit(index)
+        pass
 
