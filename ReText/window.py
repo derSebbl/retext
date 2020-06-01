@@ -15,6 +15,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import typing
 
 import markups
 import sys
@@ -42,10 +43,10 @@ except ImportError:
 	enchant = None
 
 from PyQt5.QtCore import QDir, QFile, QFileInfo, QFileSystemWatcher, \
- QIODevice, QLocale, QMarginsF, QTextCodec, QTextStream, QTimer, QUrl, Qt, pyqtSlot
+	QIODevice, QLocale, QMarginsF, QTextCodec, QTextStream, QTimer, QUrl, Qt, pyqtSlot, QObject, QEvent
 from PyQt5.QtGui import QColor, QDesktopServices, QIcon, \
- QKeySequence, QPageLayout, QPageSize, QPagedPaintDevice, QPalette, \
- QTextDocument, QTextDocumentWriter
+	QKeySequence, QPageLayout, QPageSize, QPagedPaintDevice, QPalette, \
+	QTextDocument, QTextDocumentWriter, QMouseEvent
 from PyQt5.QtWidgets import QAction, QActionGroup, QApplication, QCheckBox, \
 	QComboBox, QDesktopWidget, QDialog, QFileDialog, QFontDialog, QInputDialog, \
 	QLineEdit, QMainWindow, QMenu, QMessageBox, QTabWidget, QToolBar, QSplitter, QListView
@@ -82,10 +83,10 @@ class ReTextWindow(QMainWindow):
 		self.tabWidget = QTabWidget(self)
 		self.initTabWidget()
 
-		sideViewNotebooks = SideView(DirListerFolders())
+		sideViewNotebooks = SideView(DirListerFolders(), lambda selectedItem: sideViewPages.setDirectory(selectedItem))
 		sideViewNotebooks.setDirectory("/home/seb/tmp/test_workspace/")
 
-		sideViewPages = SideView(DirListerFilenames())
+		sideViewPages = SideView(DirListerFilenames(), lambda selectedItem: self.openFileWrapper(selectedItem))
 		sideViewPages.setDirectory("/home/seb/tmp/test_workspace/a/")
 
 		splitter = QSplitter()
@@ -99,8 +100,11 @@ class ReTextWindow(QMainWindow):
 		splitter.setStretchFactor(1, 1)
 		splitter.setStretchFactor(2, 2)
 
+
 		self.tabWidget.currentChanged.connect(self.changeIndex)
 		self.tabWidget.tabCloseRequested.connect(self.closeTab)
+		self.tabWidget.tabBar().installEventFilter(self)
+
 		self.toolBar = QToolBar(self.tr('File toolbar'), self)
 		self.addToolBar(Qt.TopToolBarArea, self.toolBar)
 		self.editBar = QToolBar(self.tr('Edit toolbar'), self)
@@ -412,6 +416,11 @@ class ReTextWindow(QMainWindow):
 				self.actionEnableSC.setChecked(True)
 		self.fileSystemWatcher = QFileSystemWatcher()
 		self.fileSystemWatcher.fileChanged.connect(self.fileChanged)
+
+	def eventFilter(self, obj, event : QEvent) -> bool:
+		if event.type() == QEvent.MouseButtonRelease:
+			print("klick hook")
+		return super().eventFilter(obj, event)
 
 	def restoreLastOpenedFiles(self):
 		for file in readListFromSettings("lastFileList"):

@@ -14,16 +14,17 @@ class IEntryProvider:
     def renameEnty(self, oldName: str, newName: str):
         pass
 
+
 class EntryProviderParent(IEntryProvider):
     def __init__(self, invalidNewEntryName: str):
         self.invalidNewEntryName = invalidNewEntryName
         self.parentDir = QDir()
 
-    def setDirectory(self, dirPath : str):
+    def setDirectory(self, dirPath: str):
         self.parentDir = QDir(dirPath)
 
     def isEntryValid(self, entry: str) -> bool:
-        #if already exists
+        # if already exists
         if entry in self.parentDir:
             return False
         if entry is self.invalidNewEntryName:
@@ -43,6 +44,7 @@ class EntryProviderDirectory(EntryProviderParent):
             raise Exception(f"Error creating directory {entry}, invalid name")
         if not self.parentDir.mkdir(entry):
             raise Exception(f"Error creating directory {entry}")
+        self.parentDir.refresh()
 
 
 class EntryProviderFile(EntryProviderParent):
@@ -52,3 +54,4 @@ class EntryProviderFile(EntryProviderParent):
         newFile = QFile(self.parentDir.filePath(entry))
         if not newFile.open(QFile.ReadWrite | QFile.Text):
             raise Exception(f"Error creating file: {entry}")
+        self.parentDir.refresh()

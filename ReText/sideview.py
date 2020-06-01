@@ -1,29 +1,28 @@
 from PyQt5 import QtCore
 from PyQt5.Qt import QDir, QListView, QStringListModel
 from PyQt5.QtCore import QFile, QTextStream, QObject
-from PyQt5.QtWidgets import QAbstractItemView
+from PyQt5.QtWidgets import QAbstractItemView, QWidget
 
 
 class DirListerFilenames:
     def listEntries(self, dir: QDir) -> [str]:
         dir.setNameFilters(["*.md"])
-        nameList = []
+        fileNames = []
         for fileInfo in dir.entryInfoList():
-            nameList.append(fileInfo.completeBaseName())
-        return nameList
+            fileNames.append(fileInfo.fileName())
+        return fileNames
 
 class DirListerFolders:
     def listEntries(self, dir: QDir) -> [str]:
         dir.setFilter(QDir.Dirs | QDir.NoDotAndDotDot)
-        nameList = []
+        folderNames = []
         for fileInfo in dir.entryInfoList():
-            nameList.append(fileInfo.completeBaseName())
-        return nameList
+            folderNames.append(fileInfo.fileName())
+        return folderNames
 
 class SortingParser:
     def __init__(self, sortingFilePath : str):
         self.sortedEntries = []
-
         self.sortingFile = QFile(sortingFilePath)
 
         if not self.sortingFile.exists():
@@ -81,10 +80,11 @@ class SortingParser:
         self.sortingFile.close()
 
 
-class SideView(QObject):
-    def __init__(self, dirLister):
+
+class SideView():
+    def __init__(self, dirLister, onItemSelectedCallback ):
         self.listView = QListView()
-        self.currentDir = None
+        self.currentDir: QDir
         self.model = QStringListModel()
         self.directoryLister = dirLister
         self.sortingParser = None
@@ -92,20 +92,19 @@ class SideView(QObject):
         self.listView.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.listView.setModel(self.model)
 
-        self.listView.selectionModel().selectionChanged.connect(self.selectionChanged)
-
-    def selectionChanged(self, selectedItem, unselectedItem):
-        self.refreshListViewEntries()
-        pass
+        self.listView.selectionModel().currentChanged.connect(
+            lambda selectedItem, unselectedItem:
+            onItemSelectedCallback(self.currentDir.filePath(selectedItem.data()))
+        )
 
     def setDirectory(self, dirPath: str):
         self.currentDir = QDir(dirPath)
         self.sortingParser = SortingParser(self.currentDir.filePath('.sorting'))
         self.refreshListViewEntries()
 
-
     def refreshListViewEntries(self):
         entries = self.directoryLister.listEntries(self.currentDir)
         sortedEntries = self.sortingParser.getSortedList(entries)
         
         self.model.setStringList(sortedEntries)
+

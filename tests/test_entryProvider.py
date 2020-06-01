@@ -25,6 +25,7 @@ class TestEntriesDir(unittest.TestCase):
 
     def test_newEntry(self):
         self.itemProvider.addEntry("1")
+        self.assertTrue(self.testDir.exists("1"))
 
     def test_newEntryTwice(self):
         self.itemProvider.addEntry("2")
@@ -59,6 +60,7 @@ class TestEntriesFiles(unittest.TestCase):
 
     def test_newEntry(self):
         self.itemProvider.addEntry("1.md")
+        self.assertTrue(self.testDir.exists("1.md"))
 
     def test_newEntryTwice(self):
         self.itemProvider.addEntry("2.md")
