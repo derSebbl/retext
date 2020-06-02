@@ -1,98 +1,42 @@
 import sys
 
-from PyQt5 import QtCore
 from PyQt5.Qt import QDir, QListView, QStringListModel
-from PyQt5.QtCore import QFile, QTextStream, QObject
-from PyQt5.QtWidgets import QAbstractItemView, QWidget, QLineEdit
+from PyQt5.QtCore import QFileInfo
+from PyQt5.QtWidgets import QAbstractItemView, QLineEdit
 
-from ReText.EntryProvider import IEntryProvider
+from ReText.EntryProvider import IEntryProvider, EntryProviderDirectory, EntryProviderFile
+from ReText.EntrySorting import EntrySortingFile
+from ReText.dirlister import DirListerFilenames, DirListerFolders
 
 
-class DirListerFilenames:
-    def listEntries(self, dir: QDir) -> [str]:
-        dir.setNameFilters(["*.md"])
-        fileNames = []
-        for fileInfo in dir.entryInfoList():
-            fileNames.append(fileInfo.fileName())
-        return fileNames
+class IItemNameNormalizer:
+    def normalizeName(self, name) -> str:
+        pass
 
-class DirListerFolders:
-    def listEntries(self, dir: QDir) -> [str]:
-        dir.setFilter(QDir.Dirs | QDir.NoDotAndDotDot)
-        folderNames = []
-        for fileInfo in dir.entryInfoList():
-            folderNames.append(fileInfo.fileName())
-        return folderNames
 
-class SortingParser:
-    def __init__(self, sortingFilePath : str):
-        self.sortedEntries = []
-        self.sortingFile = QFile(sortingFilePath)
+class ItemNameNormalizerDefault(IItemNameNormalizer):
+    def normalizeName(self, name) -> str:
+        return name
 
-        if not self.sortingFile.exists():
-            self.sortingFile.open(QFile.WriteOnly | QFile.Text)
 
-    def __getSortingFileEntries(self) -> [str]:
-        if not self.sortingFile.open(QFile.ReadOnly | QFile.Text):
-            return []
-
-        sortingFileEntries = []
-
-        inStream = QTextStream(self.sortingFile)
-        while not inStream.atEnd():
-            line = inStream.readLine()  # A QByteArray
-            sortingFileEntries.append(line)
-
-        self.sortingFile.close()
-
-        return sortingFileEntries
-
-    def __getDifference(self, actualContents : [str], eventuallyDifferentContents : [str]) -> [str]:
-        result = []
-
-        for item in actualContents:
-            if not eventuallyDifferentContents.__contains__(item):
-                result.append(item)
-
-        return result
-
-    def getSortedList(self, items : [str]) -> [str]:
-        sortingFileEntries = self.__getSortingFileEntries()
-
-        newItems = [x for x in items if x not in sortingFileEntries]
-
-        sortingFileItemsWithNewContents = sortingFileEntries + newItems
-
-        #remove all items which are not existing anymore
-        sortedEntries = [x for x in sortingFileItemsWithNewContents if x in items]
-
-        self.sortedEntries = sortedEntries
-
-        if sortedEntries != sortingFileEntries:
-            self.__saveSortingFile()
-
-        return self.sortedEntries
-
-    def __saveSortingFile(self):
-        if not self.sortingFile.open(QFile.WriteOnly | QFile.Text):
-            return
-
-        s = QTextStream(self.sortingFile)
-        for item in self.sortedEntries:
-            s << item << '\n'
-
-        self.sortingFile.close()
-
+class ItemNameNormalizerPage(IItemNameNormalizer):
+    def normalizeName(self, name) -> str:
+        fileInfo = QFileInfo(name)
+        if fileInfo.suffix() == "md":
+            return name
+        else:
+            return name + '.md'
 
 
 class SideView():
-    def __init__(self, dirLister, entryProvider : IEntryProvider, newEntryText : str, onItemSelectedCallback ):
+    def __init__(self, dirLister, entryProvider: IEntryProvider, newEntryText: str, itemNameNormalizer: IItemNameNormalizer, onItemSelectedCallback):
         self.listView = QListView()
         self.currentDir: QDir
         self.model = QStringListModel()
         self.directoryLister = dirLister
         self.entryProvider = entryProvider
         self.newEntryText = newEntryText
+        self.itemNameNormalizer = itemNameNormalizer
         self.sortingParser = None
 
         self.listView.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -101,13 +45,14 @@ class SideView():
 
         self.listView.selectionModel().currentChanged.connect(
             lambda selectedItem, unselectedItem:
-            onItemSelectedCallback(self.currentDir.filePath(selectedItem.data()))
+            onItemSelectedCallback(self.itemNameNormalizer.normalizeName(self.currentDir.filePath(selectedItem.data())))
         )
 
     def setDirectory(self, dirPath: str):
         self.currentDir = QDir(dirPath)
-        self.sortingParser = SortingParser(self.currentDir.filePath('.sorting'))
+        self.sortingParser = EntrySortingFile(self.currentDir.filePath('.sorting'))
         self.refreshListViewEntries()
+        self.entryProvider.setContext(dirPath)
 
     def refreshListViewEntries(self):
         entries = self.directoryLister.listEntries(self.currentDir)
@@ -116,13 +61,23 @@ class SideView():
         self.model.setStringList(sortedEntries)
 
     def createNewEntryTriggered(self):
-        def onNewEntryCommited(editedLine : QLineEdit):
+        def onNewEntryCommited(editedLine: QLineEdit):
+            self.listView.itemDelegate().commitData.disconnect(onNewEntryCommited)
             try:
-                self.entryProvider.addEntry(editedLine.text())
+                if editedLine.text() == self.newEntryText:
+                    raise Exception()
+
+                normalizedName = self.itemNameNormalizer.normalizeName(editedLine.text())
+                self.entryProvider.addEntry(normalizedName)
+                self.sortingParser.addEntry(normalizedName)
                 self.refreshListViewEntries()
                 self.listView.setCurrentIndex(index)
             except Exception:
                 print(f"Error adding entry {editedLine.text()}", file=sys.stderr)
+                self.model.removeRow(self.model.rowCount() -1)
+
+        if not self.model.insertRow(self.model.rowCount()):
+            return
 
         self.listView.itemDelegate().commitData.connect(onNewEntryCommited)
 
@@ -131,3 +86,26 @@ class SideView():
         self.listView.edit(index)
         pass
 
+
+class SideViewFactory:
+    @staticmethod
+    def createPagesSideView(openItemAction) -> SideView:
+        newPageText = 'New Page'
+        return SideView(
+            DirListerFilenames(),
+            EntryProviderFile(),
+            newPageText,
+            ItemNameNormalizerPage(),
+            openItemAction
+        )
+
+    @staticmethod
+    def createNotebookSideView(sideViewPages: SideView) -> SideView:
+        newNotebookText = 'New Notebook'
+        return SideView(
+            DirListerFolders(),
+            EntryProviderDirectory(),
+            newNotebookText,
+            ItemNameNormalizerDefault(),
+            lambda selectedItem: sideViewPages.setDirectory(selectedItem)
+        )

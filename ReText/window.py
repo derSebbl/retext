@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import typing
+from os.path import isfile
 
 import markups
 import sys
@@ -54,7 +55,7 @@ from PyQt5.QtWidgets import QAction, QActionGroup, QApplication, QCheckBox, \
 	QWidget
 from PyQt5.QtPrintSupport import QPrintDialog, QPrintPreviewDialog, QPrinter
 
-from ReText.sideview import SideView, DirListerFilenames, DirListerFolders
+from ReText.sideview import SideView, DirListerFilenames, DirListerFolders, SideViewFactory
 
 
 class ReTextWindow(QMainWindow):
@@ -406,8 +407,7 @@ class ReTextWindow(QMainWindow):
 		self.fileSystemWatcher = QFileSystemWatcher()
 		self.fileSystemWatcher.fileChanged.connect(self.fileChanged)
 
-	def eventFilter(self, obj, event : QEvent) -> bool:
-
+	def eventFilter(self, obj, event: QEvent) -> bool:
 		if event.type() == QEvent.MouseButtonRelease \
 		and obj == self.tabWidget.tabBar() \
 		and event.button() == Qt.MidButton:
@@ -437,15 +437,13 @@ class ReTextWindow(QMainWindow):
 			sheetfile.close()
 
 	def initSideViews(self):
-		newNotebookText = 'New Notebook'
-		sideViewNotebooks = SideView(DirListerFolders(), EntryProviderDirectory(newNotebookText), newNotebookText, lambda selectedItem: sideViewPages.setDirectory(selectedItem))
+		sideViewPages = SideViewFactory.createPagesSideView(lambda selectedItem: self.openFileWrapper(selectedItem))
+
+		sideViewNotebooks = SideViewFactory.createNotebookSideView(sideViewPages)
 		sideViewNotebooks.setDirectory("/home/seb/tmp/test_workspace/")
 
-		newPageText = 'New Page'
-		sideViewPages = SideView(DirListerFilenames(), EntryProviderFile(newPageText), newPageText, lambda selectedItem: self.openFileWrapper(selectedItem))
-		#sideViewPages.setDirectory("/home/seb/tmp/test_workspace/a/")
-
 		splitter = QSplitter()
+		splitter.setChildrenCollapsible(False)
 		self.setCentralWidget(splitter)
 
 		splitter.addWidget(sideViewNotebooks.listView)
@@ -455,10 +453,9 @@ class ReTextWindow(QMainWindow):
 
 		button_addNewPage = QPushButton()
 		button_addNewPage.setText("New Page")
-		button_addNewPage.clicked.connect(lambda: sideViewPages.createNewEntryTriggered() )
+		button_addNewPage.clicked.connect(lambda: sideViewPages.createNewEntryTriggered())
 
 		pagesLayout.addWidget(button_addNewPage)
-		sideViewPages.createNewEntryTriggered()
 
 		layoutParent = QWidget()
 		layoutParent.setLayout(pagesLayout)
@@ -903,7 +900,7 @@ class ReTextWindow(QMainWindow):
 				ex = i
 		if exists:
 			self.tabWidget.setCurrentIndex(ex)
-		elif QFile.exists(fileName):
+		elif isfile(fileName) and QFile.exists(fileName):
 			noEmptyTab = (
 				(self.ind is None) or
 				self.currentTab.fileName or

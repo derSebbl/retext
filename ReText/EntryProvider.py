@@ -2,6 +2,9 @@ from PyQt5.QtCore import QDir, QFile
 
 
 class IEntryProvider:
+    def setContext(self, context: str):
+        pass
+
     def isEntryValid(self, entry: str) -> bool:
         pass
 
@@ -16,9 +19,11 @@ class IEntryProvider:
 
 
 class EntryProviderParent(IEntryProvider):
-    def __init__(self, invalidNewEntryName: str):
-        self.invalidNewEntryName = invalidNewEntryName
+    def __init__(self):
         self.parentDir = QDir()
+
+    def setContext(self, context: str):
+        self.setDirectory(context)
 
     def setDirectory(self, dirPath: str):
         self.parentDir = QDir(dirPath)
@@ -26,8 +31,6 @@ class EntryProviderParent(IEntryProvider):
     def isEntryValid(self, entry: str) -> bool:
         # if already exists
         if entry in self.parentDir:
-            return False
-        if entry is self.invalidNewEntryName:
             return False
         return True
 
