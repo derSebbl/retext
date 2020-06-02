@@ -22,7 +22,7 @@ from PyQt5.QtCore import QFileInfo, Qt, pyqtSignal, QObject
 from PyQt5.QtWidgets import QAbstractItemView, QLineEdit, QAction, QMenu
 
 from ReText.EntryProvider import IEntryProvider, EntryProviderDirectory, EntryProviderFile
-from ReText.EntrySorting import EntrySortingFile
+from ReText.EntrySorting import EntrySortingFile, IEntrySorting
 from ReText.dirlister import DirListerFilenames, DirListerFolders
 
 
@@ -47,9 +47,10 @@ class ItemNameNormalizerPage(IItemNameNormalizer):
 
 class SideView(QObject):
     onBeforeItemDeletion = pyqtSignal(str)
+    onEntrySelected = pyqtSignal(str)
 
     def __init__(self, dirLister, entryProvider: IEntryProvider, newEntryText: str,
-                 itemNameNormalizer: IItemNameNormalizer, onItemSelectedCallback):
+                 itemNameNormalizer: IItemNameNormalizer):
         super().__init__()
 
         def initListView():
@@ -63,18 +64,23 @@ class SideView(QObject):
 
             self.listView.selectionModel().currentChanged.connect(
                 lambda selectedItem, unselectedItem:
-                onItemSelectedCallback(
+                self.onEntrySelected.emit(
                     self.itemNameNormalizer.normalizeName(self.currentDir.filePath(selectedItem.data())))
             )
 
             def contextMenu(position):
                 menu = QMenu()
                 deleteAction = menu.addAction("Delete")
+                renameAction = menu.addAction("Rename")
                 chosenAction = menu.exec_(self.listView.mapToGlobal(position))
+
+                index = self.listView.indexAt(position)
+                entry = self.model.data(index, Qt.DisplayRole)
+
                 if chosenAction == deleteAction:
-                    index = self.listView.indexAt(position)
-                    entry = self.model.data(index, Qt.DisplayRole)
-                    self.removeEntry(index, entry)
+                    self.removeEntry(entry)
+                elif chosenAction == renameAction:
+                    self.renameEntry(index,entry)
 
             self.listView.customContextMenuRequested.connect(contextMenu)
             self.listView.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -85,13 +91,34 @@ class SideView(QObject):
         self.entryProvider = entryProvider
         self.newEntryText = newEntryText
         self.itemNameNormalizer = itemNameNormalizer
-        self.sortingParser = None
+        self.sortingParser: IEntrySorting
         initListView()
 
-    def removeEntry(self, index, entry):
-        normalizedName = self.itemNameNormalizer.normalizeName(entry)
+    def renameEntry(self, index, oldName):
+        def onNewEntryCommited(editedLine: QLineEdit):
+            self.listView.itemDelegate().commitData.disconnect(onNewEntryCommited)
+            try:
+                newName = editedLine.text()
+                normalizedNameOld = self.itemNameNormalizer.normalizeName(oldName)
+                normalizedNameNew = self.itemNameNormalizer.normalizeName(newName)
 
+                self.emitOnItemDeletion(normalizedNameOld)
+
+                self.entryProvider.renameEnty(normalizedNameOld, normalizedNameNew)
+                self.sortingParser.rename(oldName, newName)
+                self.refreshListViewEntries()
+            except Exception:
+                pass
+
+        self.listView.itemDelegate().commitData.connect(onNewEntryCommited)
+        self.listView.edit(index)
+
+    def emitOnItemDeletion(self, normalizedName):
         self.onBeforeItemDeletion.emit(self.currentDir.filePath(normalizedName))
+
+    def removeEntry(self, entry):
+        normalizedName = self.itemNameNormalizer.normalizeName(entry)
+        self.emitOnItemDeletion(normalizedName)
 
         self.entryProvider.removeEntry(normalizedName)
         self.refreshListViewEntries()
@@ -108,7 +135,7 @@ class SideView(QObject):
         
         self.model.setStringList(sortedEntries)
 
-    def createNewEntryTriggered(self):
+    def onCreateNewEntry(self):
         def onNewEntryCommited(editedLine: QLineEdit):
             self.listView.itemDelegate().commitData.disconnect(onNewEntryCommited)
             try:
@@ -126,8 +153,10 @@ class SideView(QObject):
         if not self.model.insertRow(self.model.rowCount()):
             return
 
-        self.listView.itemDelegate().commitData.connect(onNewEntryCommited)
+        if not self.model.insertRow(self.model.rowCount()):
+            return
 
+        self.listView.itemDelegate().commitData.connect(onNewEntryCommited)
         index = self.model.index(self.model.rowCount() - 1, 0)
         self.model.setData(index, self.newEntryText)
         self.listView.edit(index)
@@ -136,23 +165,21 @@ class SideView(QObject):
 
 class SideViewFactory:
     @staticmethod
-    def createPagesSideView(openItemAction) -> SideView:
+    def createPagesSideView() -> SideView:
         newPageText = 'New Page'
         return SideView(
             DirListerFilenames(),
             EntryProviderFile(),
             newPageText,
-            ItemNameNormalizerPage(),
-            openItemAction
+            ItemNameNormalizerPage()
         )
 
     @staticmethod
-    def createNotebooksSideView(sideViewPages: SideView) -> SideView:
+    def createNotebooksSideView() -> SideView:
         newNotebookText = 'New Notebook'
         return SideView(
             DirListerFolders(),
             EntryProviderDirectory(),
             newNotebookText,
-            ItemNameNormalizerDefault(),
-            lambda selectedItem: sideViewPages.setDirectory(selectedItem)
+            ItemNameNormalizerDefault()
         )

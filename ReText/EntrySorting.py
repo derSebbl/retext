@@ -25,6 +25,9 @@ class IEntrySorting:
     def addEntry(self, entry: str):
         pass
 
+    def rename(self, oldName, normalizedName):
+        pass
+
 class EntrySortingFile:
     def __init__(self, sortingFilePath : str):
         self.sortedEntries = []
@@ -87,3 +90,7 @@ class EntrySortingFile:
     def addEntry(self, entry):
         self.sortedEntries.append(entry)
         self.__saveSortingFile()
+
+    def rename(self, oldName, normalizedName):
+        newSortedEntries = [x if x != oldName else normalizedName for x in self.sortedEntries]
+        self.sortedEntries = newSortedEntries

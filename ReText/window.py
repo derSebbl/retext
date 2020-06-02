@@ -437,7 +437,8 @@ class ReTextWindow(QMainWindow):
 			sheetfile.close()
 
 	def initSideViews(self):
-		sideViewPages = SideViewFactory.createPagesSideView(lambda selectedItem: self.openFileWrapper(selectedItem))
+		sideViewPages = SideViewFactory.createPagesSideView()
+		sideViewPages.onEntrySelected.connect(lambda selectedItem: self.openFileWrapper(selectedItem))
 
 		def closeTabByFilename(name):
 			for tab in self.iterateTabs():
@@ -446,7 +447,8 @@ class ReTextWindow(QMainWindow):
 
 		sideViewPages.onBeforeItemDeletion.connect(closeTabByFilename)
 
-		sideViewNotebooks = SideViewFactory.createNotebooksSideView(sideViewPages)
+		sideViewNotebooks = SideViewFactory.createNotebooksSideView()
+		sideViewNotebooks.onEntrySelected.connect(lambda selectedItem: sideViewPages.setDirectory(selectedItem))
 		sideViewNotebooks.setDirectory("/home/seb/tmp/test_workspace/")
 
 		splitter = QSplitter()
@@ -460,7 +462,7 @@ class ReTextWindow(QMainWindow):
 
 		button_addNewPage = QPushButton()
 		button_addNewPage.setText("New Page")
-		button_addNewPage.clicked.connect(lambda: sideViewPages.createNewEntryTriggered())
+		button_addNewPage.clicked.connect(lambda: sideViewPages.onCreateNewEntry())
 
 		pagesLayout.addWidget(button_addNewPage)
 

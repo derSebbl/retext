@@ -55,7 +55,8 @@ class EntryProviderParent(IEntryProvider):
         self.parentDir.remove(entry)
 
     def renameEnty(self, oldName: str, newName: str):
-        self.parentDir.rename(oldName, newName)
+        if not self.parentDir.rename(oldName, newName):
+            raise Exception("Rename Failed")
 
 
 class EntryProviderDirectory(EntryProviderParent):
