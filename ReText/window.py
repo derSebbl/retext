@@ -439,7 +439,14 @@ class ReTextWindow(QMainWindow):
 	def initSideViews(self):
 		sideViewPages = SideViewFactory.createPagesSideView(lambda selectedItem: self.openFileWrapper(selectedItem))
 
-		sideViewNotebooks = SideViewFactory.createNotebookSideView(sideViewPages)
+		def closeTabByFilename(name):
+			for tab in self.iterateTabs():
+				if tab.fileName == name:
+					self.closeTab(self.tabWidget.indexOf(tab))
+
+		sideViewPages.onBeforeItemDeletion.connect(closeTabByFilename)
+
+		sideViewNotebooks = SideViewFactory.createNotebooksSideView(sideViewPages)
 		sideViewNotebooks.setDirectory("/home/seb/tmp/test_workspace/")
 
 		splitter = QSplitter()

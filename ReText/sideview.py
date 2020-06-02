@@ -1,8 +1,9 @@
 import sys
 
+from PyQt5 import QtGui
 from PyQt5.Qt import QDir, QListView, QStringListModel
-from PyQt5.QtCore import QFileInfo
-from PyQt5.QtWidgets import QAbstractItemView, QLineEdit
+from PyQt5.QtCore import QFileInfo, Qt, pyqtSignal, QObject
+from PyQt5.QtWidgets import QAbstractItemView, QLineEdit, QAction, QMenu
 
 from ReText.EntryProvider import IEntryProvider, EntryProviderDirectory, EntryProviderFile
 from ReText.EntrySorting import EntrySortingFile
@@ -28,9 +29,40 @@ class ItemNameNormalizerPage(IItemNameNormalizer):
             return name + '.md'
 
 
-class SideView():
-    def __init__(self, dirLister, entryProvider: IEntryProvider, newEntryText: str, itemNameNormalizer: IItemNameNormalizer, onItemSelectedCallback):
-        self.listView = QListView()
+class SideView(QObject):
+    onBeforeItemDeletion = pyqtSignal(str)
+
+    def __init__(self, dirLister, entryProvider: IEntryProvider, newEntryText: str,
+                 itemNameNormalizer: IItemNameNormalizer, onItemSelectedCallback):
+        super().__init__()
+
+        def initListView():
+            self.listView = QListView()
+            self.listView.setEditTriggers(QAbstractItemView.NoEditTriggers)
+            self.listView.setModel(self.model)
+            self.listView.setMinimumWidth(200)
+
+            actionRemove = QAction("Remove", None)
+            self.listView.addAction(actionRemove)
+
+            self.listView.selectionModel().currentChanged.connect(
+                lambda selectedItem, unselectedItem:
+                onItemSelectedCallback(
+                    self.itemNameNormalizer.normalizeName(self.currentDir.filePath(selectedItem.data())))
+            )
+
+            def contextMenu(position):
+                menu = QMenu()
+                deleteAction = menu.addAction("Delete")
+                chosenAction = menu.exec_(self.listView.mapToGlobal(position))
+                if chosenAction == deleteAction:
+                    index = self.listView.indexAt(position)
+                    entry = self.model.data(index, Qt.DisplayRole)
+                    self.removeEntry(index, entry)
+
+            self.listView.customContextMenuRequested.connect(contextMenu)
+            self.listView.setContextMenuPolicy(Qt.CustomContextMenu)
+
         self.currentDir: QDir
         self.model = QStringListModel()
         self.directoryLister = dirLister
@@ -38,21 +70,21 @@ class SideView():
         self.newEntryText = newEntryText
         self.itemNameNormalizer = itemNameNormalizer
         self.sortingParser = None
+        initListView()
 
-        self.listView.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.listView.setModel(self.model)
-        self.listView.setMinimumWidth(200)
+    def removeEntry(self, index, entry):
+        normalizedName = self.itemNameNormalizer.normalizeName(entry)
 
-        self.listView.selectionModel().currentChanged.connect(
-            lambda selectedItem, unselectedItem:
-            onItemSelectedCallback(self.itemNameNormalizer.normalizeName(self.currentDir.filePath(selectedItem.data())))
-        )
+        self.onBeforeItemDeletion.emit(self.currentDir.filePath(normalizedName))
+
+        self.entryProvider.removeEntry(normalizedName)
+        self.refreshListViewEntries()
 
     def setDirectory(self, dirPath: str):
         self.currentDir = QDir(dirPath)
         self.sortingParser = EntrySortingFile(self.currentDir.filePath('.sorting'))
-        self.refreshListViewEntries()
         self.entryProvider.setContext(dirPath)
+        self.refreshListViewEntries()
 
     def refreshListViewEntries(self):
         entries = self.directoryLister.listEntries(self.currentDir)
@@ -69,7 +101,6 @@ class SideView():
 
                 normalizedName = self.itemNameNormalizer.normalizeName(editedLine.text())
                 self.entryProvider.addEntry(normalizedName)
-                self.sortingParser.addEntry(normalizedName)
                 self.refreshListViewEntries()
                 self.listView.setCurrentIndex(index)
             except Exception:
@@ -100,7 +131,7 @@ class SideViewFactory:
         )
 
     @staticmethod
-    def createNotebookSideView(sideViewPages: SideView) -> SideView:
+    def createNotebooksSideView(sideViewPages: SideView) -> SideView:
         newNotebookText = 'New Notebook'
         return SideView(
             DirListerFolders(),
