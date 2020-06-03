@@ -84,6 +84,8 @@ class SideView(QObject):
                     deleteAction = menu.addAction("Delete")
                     renameAction = menu.addAction("Rename")
 
+                refreshAction = menu.addAction("Refresh")
+
                 chosenAction = menu.exec_(self.listView.mapToGlobal(position))
 
                 if chosenAction is None:
@@ -93,13 +95,15 @@ class SideView(QObject):
                     self.onRemoveRequested.emit(entry)
                 elif chosenAction == renameAction:
                     self.renameEntry(index,entry)
-                elif addAction == addAction:
+                elif chosenAction == addAction:
                     self.onCreateNewEntry()
+                elif chosenAction == refreshAction:
+                    self.refreshListViewEntries()
 
             self.listView.customContextMenuRequested.connect(contextMenu)
             self.listView.setContextMenuPolicy(Qt.CustomContextMenu)
 
-        self.currentDir: QDir
+        self.currentDir: QDir = None
         self.model = QStringListModel()
         self.directoryLister = dirLister
         self.entryProvider = entryProvider
@@ -146,6 +150,8 @@ class SideView(QObject):
         self.onDirectoryChanged.emit(self.currentDir.absolutePath())
 
     def refreshListViewEntries(self):
+        if self.currentDir is None:
+            return
         entries = self.directoryLister.listEntries(self.currentDir)
         sortedEntries = self.sortingParser.getSortedList(entries)
         

@@ -137,7 +137,7 @@ setup(name='ReText',
         ('share/retext/locale', iglob('locale/*.qm'))
       ],
       python_requires='>=3.4',
-      requires=['docutils', 'Markdown', 'Markups(>=2.0)', 'pyenchant', 'Pygments', 'PyQt5'],
+      requires=['docutils', 'Markdown', 'Markups(>=2.0)', 'pyenchant', 'Pygments', 'PyQt5', 'GitPython'],
       install_requires=[
         'docutils',
         'Markdown>=3.0',
@@ -145,6 +145,7 @@ setup(name='ReText',
         'Pygments',
         'chardet>=2.3',
         'PyQt5',
+	'GitPython',
       ],
       extras_require={
         'spellcheck': ['pyenchant'],

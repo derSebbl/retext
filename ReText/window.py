@@ -448,6 +448,8 @@ class ReTextWindow(QMainWindow):
 			repo = Repo(gitPath)
 			o = repo.remotes.origin
 			o.pull()
+			self.sideViewPages.refreshListViewEntries()
+			self.sideViewNotebooks.refreshListViewEntries()
 			QMessageBox.information(self, "Pull successfull", "Update successful.")
 		except Exception as e:
 			print('Some error occurred while pulling')
@@ -484,24 +486,24 @@ class ReTextWindow(QMainWindow):
 			sheetfile.close()
 
 	def initSideViews(self):
-		sideViewPages = SideViewFactory.createPagesSideView()
-		sideViewPages.onEntrySelected.connect(lambda selectedItem: self.openFileWrapper(selectedItem))
+		self.sideViewPages = SideViewFactory.createPagesSideView()
+		self.sideViewPages.onEntrySelected.connect(lambda selectedItem: self.openFileWrapper(selectedItem))
 
 		def closeTabByFilename(name):
 			for tab in self.iterateTabs():
 				if tab.fileName == name:
 					self.closeTab(self.tabWidget.indexOf(tab))
 
-		sideViewPages.onBeforeItemDeletion.connect(closeTabByFilename)
+		self.sideViewPages.onBeforeItemDeletion.connect(closeTabByFilename)
 
 
-		sideViewPages.onRemoveRequested.connect(
+		self.sideViewPages.onRemoveRequested.connect(
 			lambda entry:
-			removeDialog(entry, sideViewPages)
+			removeDialog(entry, self.sideViewPages)
 		)
 
 		self.sideViewNotebooks = SideViewFactory.createNotebooksSideView()
-		self.sideViewNotebooks.onEntrySelected.connect(lambda selectedItem: sideViewPages.setDirectory(selectedItem))
+		self.sideViewNotebooks.onEntrySelected.connect(lambda selectedItem: self.sideViewPages.setDirectory(selectedItem))
 
 		currentNotebook = readFromSettings("lastNotebook", str)
 		self.sideViewNotebooks.onDirectoryChanged.connect(
@@ -548,11 +550,11 @@ class ReTextWindow(QMainWindow):
 		pagesLayoutParent = QWidget()
 		pagesLayoutParent.setLayout(pagesLayout)
 
-		pagesLayout.addWidget(sideViewPages.listView)
+		pagesLayout.addWidget(self.sideViewPages.listView)
 
 		button_addNewPage = QPushButton()
 		button_addNewPage.setText("New Page")
-		button_addNewPage.clicked.connect(lambda: sideViewPages.onCreateNewEntry())
+		button_addNewPage.clicked.connect(lambda: self.sideViewPages.onCreateNewEntry())
 		pagesLayout.addWidget(button_addNewPage)
 
 		splitter.addWidget(notebookLayoutParent)
