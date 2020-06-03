@@ -35,6 +35,7 @@ class EntrySortingFile:
 
         if not self.sortingFile.exists():
             self.sortingFile.open(QFile.WriteOnly | QFile.Text)
+            self.sortingFile.close()
 
     def __getSortingFileEntries(self) -> [str]:
         if not self.sortingFile.open(QFile.ReadOnly | QFile.Text):

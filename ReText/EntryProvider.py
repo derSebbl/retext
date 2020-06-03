@@ -52,7 +52,8 @@ class EntryProviderParent(IEntryProvider):
         return True
 
     def removeEntry(self, entry: str):
-        self.parentDir.remove(entry)
+        if not self.parentDir.remove(entry):
+            raise Exception("Failed to remove entry")
 
     def renameEnty(self, oldName: str, newName: str):
         if not self.parentDir.rename(oldName, newName):
@@ -60,6 +61,10 @@ class EntryProviderParent(IEntryProvider):
 
 
 class EntryProviderDirectory(EntryProviderParent):
+    def removeEntry(self, entry: str):
+        if not QDir(self.parentDir.filePath(entry)).removeRecursively():
+            raise Exception("Failed to remove entry")
+
     def addEntry(self, entry: str):
         if not self.isEntryValid(entry):
             raise Exception(f"Error creating directory {entry}, invalid name")

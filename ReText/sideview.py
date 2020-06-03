@@ -48,6 +48,8 @@ class ItemNameNormalizerPage(IItemNameNormalizer):
 class SideView(QObject):
     onBeforeItemDeletion = pyqtSignal(str)
     onEntrySelected = pyqtSignal(str)
+    onDirectoryChanged = pyqtSignal(str)
+    onRemoveRequested = pyqtSignal(str)
 
     def __init__(self, dirLister, entryProvider: IEntryProvider, newEntryText: str,
                  itemNameNormalizer: IItemNameNormalizer):
@@ -70,17 +72,29 @@ class SideView(QObject):
 
             def contextMenu(position):
                 menu = QMenu()
-                deleteAction = menu.addAction("Delete")
-                renameAction = menu.addAction("Rename")
-                chosenAction = menu.exec_(self.listView.mapToGlobal(position))
-
                 index = self.listView.indexAt(position)
                 entry = self.model.data(index, Qt.DisplayRole)
 
+                deleteAction = None
+                renameAction = None
+
+                addAction = menu.addAction("Add")
+
+                if entry is not None:
+                    deleteAction = menu.addAction("Delete")
+                    renameAction = menu.addAction("Rename")
+
+                chosenAction = menu.exec_(self.listView.mapToGlobal(position))
+
+                if chosenAction is None:
+                    return
+
                 if chosenAction == deleteAction:
-                    self.removeEntry(entry)
+                    self.onRemoveRequested.emit(entry)
                 elif chosenAction == renameAction:
                     self.renameEntry(index,entry)
+                elif addAction == addAction:
+                    self.onCreateNewEntry()
 
             self.listView.customContextMenuRequested.connect(contextMenu)
             self.listView.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -129,6 +143,8 @@ class SideView(QObject):
         self.entryProvider.setContext(dirPath)
         self.refreshListViewEntries()
 
+        self.onDirectoryChanged.emit(self.currentDir.absolutePath())
+
     def refreshListViewEntries(self):
         entries = self.directoryLister.listEntries(self.currentDir)
         sortedEntries = self.sortingParser.getSortedList(entries)
@@ -149,9 +165,6 @@ class SideView(QObject):
             except Exception:
                 print(f"Error adding entry {editedLine.text()}", file=sys.stderr)
                 self.model.removeRow(self.model.rowCount() -1)
-
-        if not self.model.insertRow(self.model.rowCount()):
-            return
 
         if not self.model.insertRow(self.model.rowCount()):
             return

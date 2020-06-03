@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import typing
+from datetime import datetime
 from os.path import isfile
 
 import markups
@@ -24,7 +25,7 @@ from subprocess import Popen
 import warnings
 
 from ReText import (getBundledIcon, app_version, globalSettings,
-                    readListFromSettings, writeListToSettings, datadirs)
+					readListFromSettings, writeListToSettings, datadirs, writeToSettings, readFromSettings)
 from ReText.EntryProvider import EntryProviderDirectory, EntryProviderFile
 
 from ReText.tab import (ReTextTab, ReTextWebKitPreview, ReTextWebEnginePreview,
@@ -32,6 +33,8 @@ from ReText.tab import (ReTextTab, ReTextWebKitPreview, ReTextWebEnginePreview,
 from ReText.dialogs import HtmlDialog, LocaleDialog
 from ReText.config import ConfigDialog, setIconThemeFromSettings
 from ReText.tabledialog import InsertTableDialog
+
+from git import Repo
 
 
 try:
@@ -200,6 +203,12 @@ class ReTextWindow(QMainWindow):
 			lambda: self.currentTab.editBox.moveLineUp(), shct=Qt.ALT+Qt.Key_Up)
 		self.actionMoveDown = self.act(self.tr('Move line down'), 'go-down',
 			lambda: self.currentTab.editBox.moveLineDown(), shct=Qt.ALT+Qt.Key_Down)
+
+		self.actionPush = self.act(self.tr('Push'), 'arrow-up-double',
+								  lambda: self.push(), shct=QKeySequence.Cut)
+		self.actionPull = self.act(self.tr('Pull'), 'arrow-down-double',
+								   lambda: self.pull(), shct=QKeySequence.Cut)
+
 		self.actionUndo.setEnabled(False)
 		self.actionRedo.setEnabled(False)
 		self.actionCopy.setEnabled(False)
@@ -372,6 +381,11 @@ class ReTextWindow(QMainWindow):
 		self.editBar.addSeparator()
 		self.editBar.addWidget(self.formattingBox)
 		self.editBar.addWidget(self.symbolBox)
+		self.editBar.addSeparator()
+		self.editBar.addAction(self.actionPush)
+		self.editBar.addAction(self.actionPull)
+
+
 		self.searchEdit = QLineEdit(self.searchBar)
 		self.searchEdit.setPlaceholderText(self.tr('Search'))
 		self.searchEdit.returnPressed.connect(self.find)
@@ -406,6 +420,39 @@ class ReTextWindow(QMainWindow):
 				self.actionEnableSC.setChecked(True)
 		self.fileSystemWatcher = QFileSystemWatcher()
 		self.fileSystemWatcher.fileChanged.connect(self.fileChanged)
+
+	def push(self):
+		gitPath = self.sideViewNotebooks.currentDir.filePath('.git')
+		commitMessage = str(datetime.now())
+
+		try:
+			repo = Repo(gitPath)
+			repo.git.add(all=True)
+			commit = repo.index.commit(commitMessage)
+
+			if len(commit.stats.files) == 0:
+				QMessageBox.information(self, "Commit status", "Nothing to be commited.")
+				return
+			origin = repo.remote(name='origin')
+			origin.push()
+			QMessageBox.information(self, "Commit success", "Changes commited successfully.")
+		except Exception as e:
+			print('Some error occurred while pushing')
+			raise e
+		pass
+
+	def pull(self):
+		gitPath = self.sideViewNotebooks.currentDir.filePath('.git')
+
+		try:
+			repo = Repo(gitPath)
+			o = repo.remotes.origin
+			o.pull()
+			QMessageBox.information(self, "Pull successfull", "Update successful.")
+		except Exception as e:
+			print('Some error occurred while pulling')
+			raise e
+		pass
 
 	def eventFilter(self, obj, event: QEvent) -> bool:
 		if event.type() == QEvent.MouseButtonRelease \
@@ -447,9 +494,32 @@ class ReTextWindow(QMainWindow):
 
 		sideViewPages.onBeforeItemDeletion.connect(closeTabByFilename)
 
-		sideViewNotebooks = SideViewFactory.createNotebooksSideView()
-		sideViewNotebooks.onEntrySelected.connect(lambda selectedItem: sideViewPages.setDirectory(selectedItem))
-		sideViewNotebooks.setDirectory("/home/seb/tmp/test_workspace/")
+
+		sideViewPages.onRemoveRequested.connect(
+			lambda entry:
+			removeDialog(entry, sideViewPages)
+		)
+
+		self.sideViewNotebooks = SideViewFactory.createNotebooksSideView()
+		self.sideViewNotebooks.onEntrySelected.connect(lambda selectedItem: sideViewPages.setDirectory(selectedItem))
+
+		currentNotebook = readFromSettings("lastNotebook", str)
+		self.sideViewNotebooks.onDirectoryChanged.connect(
+			lambda dirPath: writeToSettings("lastNotebook", dirPath, "")
+		)
+
+		def removeDialog(entry, sideView):
+			result = QMessageBox.question(self, f"Remove {entry}",f"Do you really want to remove {entry}?")
+			if result == QMessageBox.Yes:
+				sideView.removeEntry(entry)
+
+		self.sideViewNotebooks.onRemoveRequested.connect(
+			lambda entry:
+			removeDialog(entry, self.sideViewNotebooks)
+		)
+
+		if currentNotebook is not None:
+			self.sideViewNotebooks.setDirectory(currentNotebook)
 
 		splitter = QSplitter()
 		splitter.setChildrenCollapsible(False)
@@ -459,10 +529,18 @@ class ReTextWindow(QMainWindow):
 		notebookLayoutParent = QWidget()
 		notebookLayoutParent.setLayout(notebookLayout)
 
-		notebookLayout.addWidget(sideViewNotebooks.listView)
+		notebookLayout.addWidget(self.sideViewNotebooks.listView)
+
+		def chooseNotebook():
+			dirPath = str(QFileDialog.getExistingDirectory(self, "Select Notebook Directory"))
+			if dirPath:
+				self.sideViewNotebooks.setDirectory(dirPath)
+
+
 
 		button_openNotebook = QPushButton()
 		button_openNotebook.setText("Open Notebook")
+		button_openNotebook.clicked.connect(chooseNotebook)
 
 		notebookLayout.addWidget(button_openNotebook)
 
