@@ -455,21 +455,30 @@ class ReTextWindow(QMainWindow):
 		splitter.setChildrenCollapsible(False)
 		self.setCentralWidget(splitter)
 
-		splitter.addWidget(sideViewNotebooks.listView)
+		notebookLayout = QVBoxLayout()
+		notebookLayoutParent = QWidget()
+		notebookLayoutParent.setLayout(notebookLayout)
+
+		notebookLayout.addWidget(sideViewNotebooks.listView)
+
+		button_openNotebook = QPushButton()
+		button_openNotebook.setText("Open Notebook")
+
+		notebookLayout.addWidget(button_openNotebook)
 
 		pagesLayout = QVBoxLayout()
+		pagesLayoutParent = QWidget()
+		pagesLayoutParent.setLayout(pagesLayout)
+
 		pagesLayout.addWidget(sideViewPages.listView)
 
 		button_addNewPage = QPushButton()
 		button_addNewPage.setText("New Page")
 		button_addNewPage.clicked.connect(lambda: sideViewPages.onCreateNewEntry())
-
 		pagesLayout.addWidget(button_addNewPage)
 
-		layoutParent = QWidget()
-		layoutParent.setLayout(pagesLayout)
-
-		splitter.addWidget(layoutParent)
+		splitter.addWidget(notebookLayoutParent)
+		splitter.addWidget(pagesLayoutParent)
 		splitter.addWidget(self.tabWidget)
 
 		splitter.setStretchFactor(0, 1)
